@@ -4,11 +4,28 @@ import (
 	"fmt"
 	"net/http"
 	"html/template"
+	"encoding/xml"
+	"io/ioutil"
 )
+
+type SitemapIndex struct {
+	Locations []string `xml:"sitemap>loc"`
+}
+
+type News struct {
+	Titles []string `xml:"url>news>title"`
+	Keywords []string `xml:"url>news>keywords"`
+	Locations []string `xml:"url>loc"`
+}
+
+type NewsMap struct {
+	Keyword string
+	Location string
+}
 
 type NewsAggPage struct {
 	Title string
-	News string
+	News map[string]NewsMap
 }
 
 func indexHandler(w http.ResponseWriter, r *http.Request) {
@@ -16,9 +33,26 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func newsAggHandler(w http.ResponseWriter, r *http.Request) {
-	p := NewsAggPage{Title: "Amazo News", News: "You are reading it"}
+	var s SitemapIndex
+	var n News
+	nm := make(map[string]NewsMap)
+	resp, _ := http.Get("https://www.washingtonpost.com/news-sitemap-index.xml")
+	bytes, _ := ioutil.ReadAll(resp.Body)
+	xml.Unmarshal(bytes,&s)
+	
+
+	for _, Location := range s.Locations {
+		resp, _ := http.Get(Location)
+		bytes, _ := ioutil.ReadAll(resp.Body)
+		xml.Unmarshal(bytes, &n)
+
+		for idx, _ := range n.Keywords {
+			nm[n.Titles[idx]] = NewsMap{n.Keywords[idx], n.Locations[idx]}
+		}
+	}
+	p := NewsAggPage{Title: "Amazo News", News: nm}
 	t, _ := template.ParseFiles("basictemplating.html")
-	t.Execute(w, p)
+	fmt.Println(t.Execute(w, p))
 }
 
 func main() {
